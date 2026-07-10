@@ -26,7 +26,7 @@ game:          # e.g. Stardew Valley
 title:         # what the table does, e.g. Infinite Money + Energy
 version:       # game build the table targets, e.g. 1.6.8
 
-# Recommended (leave blank if unknown)
+# Recommended (leave as-is if unknown)
 distributor:   # Steam / Epic / GOG / itch / retail / ...
 runtime:       # native / proton / wine
 binary_sha256: # sha256 of the game binary
