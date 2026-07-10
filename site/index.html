@@ -142,27 +142,62 @@
     });
 
     // A cross-origin link ignores the `download` attribute, and raw files are served
-    // as text/plain, so a plain click just shows the text. Raw allows CORS, so fetch
-    // the file and save it as a blob to force a real download with the right filename.
+    // as text/plain, so a plain click just shows the text. Raw allows CORS, so we fetch
+    // the file and save it. Where the File System Access API exists (Chromium) we prompt
+    // a Save As dialog so the user picks the folder, otherwise we fall back to a blob
+    // download, which respects the browser's own "ask where to save" setting.
+    async function saveBlobFallback(url, name) {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const objUrl = URL.createObjectURL(await resp.blob());
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+    }
+
     els.results.addEventListener("click", async (e) => {
       const link = e.target.closest("a.dl");
       if (!link) return;
       e.preventDefault();
       const url = link.href;
       const name = link.dataset.name || "table.pct";
+
+      // Chromium: prompt a native Save As dialog so the user can choose the folder.
+      if (window.showSaveFilePicker) {
+        let handle;
+        try {
+          handle = await window.showSaveFilePicker({
+            suggestedName: name,
+            types: [{ description: "PINCE cheat table", accept: { "application/octet-stream": [".pct"] } }],
+          });
+        } catch (err) {
+          if (err.name === "AbortError") return;  // user cancelled the dialog
+          handle = null;  // picker unavailable, fall through to the blob download
+        }
+        if (handle) {
+          try {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error("HTTP " + resp.status);
+            const writable = await handle.createWritable();
+            await writable.write(await resp.blob());
+            await writable.close();
+            return;
+          } catch (err) {
+            window.open(url, "_blank");
+            return;
+          }
+        }
+      }
+
+      // Firefox/Safari, or picker blocked: download to the browser's default location.
       try {
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error("HTTP " + resp.status);
-        const objUrl = URL.createObjectURL(await resp.blob());
-        const a = document.createElement("a");
-        a.href = objUrl;
-        a.download = name;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(objUrl);
+        await saveBlobFallback(url, name);
       } catch (err) {
-        window.open(url, "_blank");  // fallback: open the raw file so it can be saved manually
+        window.open(url, "_blank");  // last resort: open the raw file so it can be saved manually
       }
     });
   </script>
