@@ -24,11 +24,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out base repo scripts (trusted)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: "3.14"
 
       - name: Validate submission
         id: validate
@@ -41,7 +41,7 @@ jobs:
         run: python .github/scripts/validate_submission.py
 
       - name: Post / update result comment
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: pct-validation
           path: validation-report.md
