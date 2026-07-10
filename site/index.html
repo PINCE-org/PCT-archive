@@ -41,6 +41,8 @@
     .chip { background: var(--chip); color: var(--muted); border-radius: 999px; padding: 2px 9px; font-size: 0.78rem; }
     .meta-author { color: var(--muted); font-size: 0.8rem; margin-top: 4px; }
     .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+    .actions { display: flex; gap: 14px; align-items: center; white-space: nowrap; }
+    a.view { color: var(--muted); text-decoration: none; font-weight: 600; }
     a.dl { color: var(--accent); text-decoration: none; font-weight: 600; white-space: nowrap; }
   </style>
 </head>
@@ -54,7 +56,7 @@
     <input id="q" type="search" placeholder="Search game or table title…" autocomplete="off" />
     <select id="distributor"><option value="">Any distributor</option></select>
     <select id="runtime"><option value="">Any runtime</option></select>
-    <a class="btn" href="https://github.com/PINCE-org/PCT-archive/upload/main/tables">Submit a table</a>
+    <a class="btn" href="https://github.com/PINCE-org/PCT-archive/blob/main/CONTRIBUTING.md">Submit a table</a>
   </div>
 
   <main id="results"><p class="empty">Loading…</p></main>
@@ -106,10 +108,14 @@
             .filter(Boolean).map((c) => `<span class="chip">${esc(c)}</span>`).join("");
           const author = t.author ? `<div class="meta-author">by ${esc(t.author)}</div>` : "";
           const href = RAW_BASE + t.pct_path.split("/").map(encodeURIComponent).join("/");
+          const fname = t.pct_path.split("/").pop();
           return `<div class="card"><div>
               <div class="title">${esc(t.title)}</div>
               <div class="chips">${chips}</div>${author}
-            </div><a class="dl" href="${href}" download>Download</a></div>`;
+            </div><div class="actions">`
+            + `<a class="view" href="${href}" target="_blank" rel="noopener">View</a>`
+            + `<a class="dl" href="${href}" download="${esc(fname)}" data-name="${esc(fname)}">Download</a>`
+            + `</div></div>`;
         }).join("");
         return `<h2 class="game">${esc(game)}</h2>${cards}`;
       }).join("");
@@ -133,6 +139,31 @@
       els.q.addEventListener(ev, render);
       els.distributor.addEventListener(ev, render);
       els.runtime.addEventListener(ev, render);
+    });
+
+    // A cross-origin link ignores the `download` attribute, and raw files are served
+    // as text/plain, so a plain click just shows the text. Raw allows CORS, so fetch
+    // the file and save it as a blob to force a real download with the right filename.
+    els.results.addEventListener("click", async (e) => {
+      const link = e.target.closest("a.dl");
+      if (!link) return;
+      e.preventDefault();
+      const url = link.href;
+      const name = link.dataset.name || "table.pct";
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        const objUrl = URL.createObjectURL(await resp.blob());
+        const a = document.createElement("a");
+        a.href = objUrl;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objUrl);
+      } catch (err) {
+        window.open(url, "_blank");  // fallback: open the raw file so it can be saved manually
+      }
     });
   </script>
 </body>
