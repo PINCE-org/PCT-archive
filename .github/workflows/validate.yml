@@ -1,0 +1,51 @@
+name: Validate submission
+
+# pull_request_target runs in the BASE repo context so it can comment on PRs from
+# forks (which is how the browser "upload → auto-fork" flow submits). The submitted
+# .pct is treated strictly as data (parsed, never executed) and the fork's code is
+# never checked out or run. Only the trusted scripts below run.
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+    paths:
+      - "tables/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# One run per PR, newer pushes cancel older in-flight checks.
+concurrency:
+  group: validate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out base repo scripts (trusted)
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate submission
+        id: validate
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python .github/scripts/validate_submission.py
+
+      - name: Post / update result comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: pct-validation
+          path: validation-report.md
+
+      - name: Fail the check if validation failed
+        if: steps.validate.outcome == 'failure'
+        run: exit 1

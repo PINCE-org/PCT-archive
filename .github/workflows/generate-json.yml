@@ -1,0 +1,54 @@
+name: Generate sidecar on merge
+
+# When a submission PR is merged, generate the .json sidecar from the PR metadata,
+# commit it next to the .pct, then kick off the Pages rebuild.
+on:
+  pull_request_target:
+    types: [closed]
+    paths:
+      - "tables/**"
+
+permissions:
+  contents: write
+  pull-requests: read
+  actions: write   # to dispatch the Pages build (bot pushes don't auto-trigger it)
+
+jobs:
+  generate:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate sidecar
+        id: gen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          path=$(python .github/scripts/generate_json.py)
+          echo "json_path=$path" >> "$GITHUB_OUTPUT"
+
+      - name: Commit sidecar
+        env:
+          JSON_PATH: ${{ steps.gen.outputs.json_path }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$JSON_PATH"
+          git commit -m "Add metadata for ${JSON_PATH}"
+          git push
+
+      - name: Trigger Pages rebuild
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build-pages.yml --ref "${{ github.event.repository.default_branch }}"

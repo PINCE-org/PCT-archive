@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PINCE Cheat Table Archive</title>
+  <style>
+    :root {
+      --bg: #ffffff; --fg: #1b1f24; --muted: #5a6270; --card: #f6f8fa;
+      --border: #d0d7de; --accent: #2563eb; --chip: #eaeef2;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117; --fg: #e6edf3; --muted: #8b949e; --card: #161b22;
+        --border: #30363d; --accent: #4c8dff; --chip: #21262d;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+    header { padding: 24px 20px 8px; max-width: 900px; margin: 0 auto; }
+    h1 { margin: 0 0 4px; font-size: 1.5rem; }
+    .sub { color: var(--muted); margin: 0 0 16px; }
+    .controls { max-width: 900px; margin: 0 auto; padding: 0 20px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    input, select {
+      background: var(--card); color: var(--fg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 10px; font-size: 0.95rem;
+    }
+    #q { flex: 1 1 240px; }
+    .btn {
+      background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+      padding: 8px 14px; font-size: 0.95rem; text-decoration: none; white-space: nowrap;
+    }
+    main { max-width: 900px; margin: 16px auto 48px; padding: 0 20px; }
+    .game { margin: 22px 0 8px; font-size: 1.05rem; color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 14px; margin: 8px 0; display: flex; justify-content: space-between; gap: 12px; align-items: center;
+    }
+    .title { font-weight: 600; }
+    .chips { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { background: var(--chip); color: var(--muted); border-radius: 999px; padding: 2px 9px; font-size: 0.78rem; }
+    .meta-author { color: var(--muted); font-size: 0.8rem; margin-top: 4px; }
+    .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+    a.dl { color: var(--accent); text-decoration: none; font-weight: 600; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PINCE Cheat Table Archive</h1>
+    <p class="sub">Search and download community <code>.pct</code> cheat tables.</p>
+  </header>
+
+  <div class="controls">
+    <input id="q" type="search" placeholder="Search game or table title…" autocomplete="off" />
+    <select id="distributor"><option value="">Any distributor</option></select>
+    <select id="runtime"><option value="">Any runtime</option></select>
+    <a class="btn" href="https://github.com/PINCE-org/PCT-archive/upload/main/tables">Submit a table</a>
+  </div>
+
+  <main id="results"><p class="empty">Loading…</p></main>
+
+  <script>
+    // Where the raw .pct files live. Update if the repo owner/branch changes.
+    const RAW_BASE = "https://raw.githubusercontent.com/PINCE-org/PCT-archive/main/";
+
+    const els = {
+      q: document.getElementById("q"),
+      distributor: document.getElementById("distributor"),
+      runtime: document.getElementById("runtime"),
+      results: document.getElementById("results"),
+    };
+    let tables = [];
+
+    function fillFacet(select, values) {
+      [...new Set(values.filter(Boolean))].sort().forEach((v) => {
+        const opt = document.createElement("option");
+        opt.value = v.toLowerCase();
+        opt.textContent = v;
+        select.appendChild(opt);
+      });
+    }
+
+    function render() {
+      const q = els.q.value.trim().toLowerCase();
+      const dist = els.distributor.value;
+      const rt = els.runtime.value;
+
+      const filtered = tables.filter((t) => {
+        if (dist && (t.distributor || "").toLowerCase() !== dist) return false;
+        if (rt && (t.runtime || "").toLowerCase() !== rt) return false;
+        if (q && !(`${t.game} ${t.title}`.toLowerCase().includes(q))) return false;
+        return true;
+      });
+
+      if (!filtered.length) {
+        els.results.innerHTML = '<p class="empty">No tables match your search.</p>';
+        return;
+      }
+
+      const byGame = {};
+      filtered.forEach((t) => (byGame[t.game] ||= []).push(t));
+
+      els.results.innerHTML = Object.keys(byGame).sort().map((game) => {
+        const cards = byGame[game].map((t) => {
+          const chips = [t.distributor, t.version && "v" + t.version, t.runtime]
+            .filter(Boolean).map((c) => `<span class="chip">${esc(c)}</span>`).join("");
+          const author = t.author ? `<div class="meta-author">by ${esc(t.author)}</div>` : "";
+          const href = RAW_BASE + t.pct_path.split("/").map(encodeURIComponent).join("/");
+          return `<div class="card"><div>
+              <div class="title">${esc(t.title)}</div>
+              <div class="chips">${chips}</div>${author}
+            </div><a class="dl" href="${href}" download>Download</a></div>`;
+        }).join("");
+        return `<h2 class="game">${esc(game)}</h2>${cards}`;
+      }).join("");
+    }
+
+    function esc(s) {
+      return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    }
+
+    fetch("./index.json")
+      .then((r) => r.json())
+      .then((data) => {
+        tables = data.tables || [];
+        fillFacet(els.distributor, tables.map((t) => t.distributor));
+        fillFacet(els.runtime, tables.map((t) => t.runtime));
+        render();
+      })
+      .catch(() => (els.results.innerHTML = '<p class="empty">Could not load the table index yet.</p>'));
+
+    ["input", "change"].forEach((ev) => {
+      els.q.addEventListener(ev, render);
+      els.distributor.addEventListener(ev, render);
+      els.runtime.addEventListener(ev, render);
+    });
+  </script>
+</body>
+</html>
