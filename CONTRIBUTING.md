@@ -6,10 +6,9 @@ You can submit a cheat table easily via browser without needing Git or any devel
 
 1. **Sign in** to GitHub (a free account is all you need).
 2. Go to the [tables folder](../../tree/main/tables) and click
-   **Add file → Upload files** (or use the **Submit a table** button on the
-   [website](https://pince-org.github.io/PCT-archive/)).
-3. **Drag in your `.pct` file.** Put it in a folder named after the game, e.g.
-   `tables/Stardew Valley/infinite-money.pct`. Upload only the `.pct` and nothing else.
+   **Add file → Upload files**.
+3. Put your `.pct` in a **folder named after the game** (e.g. a `Stardew Valley`
+   folder containing `infinite-money.pct`), then **drag that folder** in.
 4. Click **Commit changes**. GitHub will offer to **create a fork and propose changes**. Accept it.
 5. On the pull request screen, **fill in the metadata block** in the description.
 6. Submit. A bot will check your submission and comment with anything to fix. A maintainer then reviews and merges it.
