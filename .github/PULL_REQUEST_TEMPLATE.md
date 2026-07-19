@@ -22,6 +22,9 @@ distributor:   # Steam / Epic / GOG / itch / retail / ...
 runtime:       # native / proton / wine
 binary_sha256: # sha256 of the game binary
 author:        # name or handle of the author
+
+# Notes (optional, may span multiple lines). Keep this last and write below.
+notes:
 ```
 
 ## Checklist

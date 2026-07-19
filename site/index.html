@@ -6,12 +6,12 @@
   <title>PINCE Cheat Table Archive</title>
   <style>
     :root {
-      --bg: #ffffff; --fg: #1b1f24; --muted: #5a6270; --card: #f6f8fa;
+      --bg: #ffffff; --fg: #1b1f24; --fg-soft: #3a4048; --muted: #5a6270; --card: #f6f8fa;
       --border: #d0d7de; --accent: #2563eb; --chip: #eaeef2;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #0d1117; --fg: #e6edf3; --muted: #8b949e; --card: #161b22;
+        --bg: #0d1117; --fg: #e6edf3; --fg-soft: #c9d1da; --muted: #8b949e; --card: #161b22;
         --border: #30363d; --accent: #4c8dff; --chip: #21262d;
       }
     }
@@ -31,12 +31,12 @@
       padding: 8px 14px; font-size: 0.95rem; text-decoration: none; white-space: nowrap;
     }
     main { max-width: 900px; margin: 16px auto 48px; padding: 0 20px; }
-    .game { margin: 22px 0 8px; font-size: 1.05rem; color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+    .game { margin: 22px 0 8px; font-size: 1.05rem; color: var(--fg); border-bottom: 1px solid var(--border); padding-bottom: 4px; }
     .card {
       background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-      padding: 12px 14px; margin: 8px 0; display: flex; justify-content: space-between; gap: 12px; align-items: center;
+      padding: 12px 14px; margin: 8px 0; display: flex; justify-content: space-between; gap: 12px; align-items: flex-start;
     }
-    .title { font-weight: 600; }
+    .title { font-weight: 600; color: var(--fg-soft); }
     .chips { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
     .chip { background: var(--chip); color: var(--muted); border-radius: 999px; padding: 2px 9px; font-size: 0.78rem; }
     .meta-author { color: var(--muted); font-size: 0.8rem; margin-top: 4px; }
@@ -44,6 +44,18 @@
     .actions { display: flex; gap: 14px; align-items: center; white-space: nowrap; }
     a.view { color: var(--muted); text-decoration: none; font-weight: 600; }
     a.dl { color: var(--accent); text-decoration: none; font-weight: 600; white-space: nowrap; }
+    .info { flex: 1; min-width: 0; }
+    .notes {
+      margin-top: 8px; color: var(--muted); font-size: 0.82rem; line-height: 1.4;
+      white-space: pre-wrap; overflow-wrap: anywhere;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+    }
+    .notes.expanded { -webkit-line-clamp: unset; }
+    .notes-toggle {
+      display: block; margin-top: 4px; padding: 0; border: 0; background: none;
+      color: var(--accent); font: inherit; font-size: 0.78rem; cursor: pointer;
+    }
+    .notes-toggle[hidden] { display: none; }
   </style>
 </head>
 <body>
@@ -90,7 +102,7 @@
       const filtered = tables.filter((t) => {
         if (dist && (t.distributor || "").toLowerCase() !== dist) return false;
         if (rt && (t.runtime || "").toLowerCase() !== rt) return false;
-        if (q && !(`${t.game} ${t.title}`.toLowerCase().includes(q))) return false;
+        if (q && !(`${t.game} ${t.title} ${t.notes || ""}`.toLowerCase().includes(q))) return false;
         return true;
       });
 
@@ -109,9 +121,10 @@
           const author = t.author ? `<div class="meta-author">by ${esc(t.author)}</div>` : "";
           const href = RAW_BASE + t.pct_path.split("/").map(encodeURIComponent).join("/");
           const fname = t.pct_path.split("/").pop();
-          return `<div class="card"><div>
+          const notes = t.notes ? `<div class="notes">${esc(t.notes)}</div><button class="notes-toggle" type="button" hidden></button>` : "";
+          return `<div class="card"><div class="info">
               <div class="title">${esc(t.title)}</div>
-              <div class="chips">${chips}</div>${author}
+              <div class="chips">${chips}</div>${author}${notes}
             </div><div class="actions">`
             + `<a class="view" href="${href}" target="_blank" rel="noopener">View</a>`
             + `<a class="dl" href="${href}" download="${esc(fname)}" data-name="${esc(fname)}">Download</a>`
@@ -119,7 +132,23 @@
         }).join("");
         return `<h2 class="game">${esc(game)}</h2>${cards}`;
       }).join("");
+      markClamped();
     }
+
+    // Reveal the expand/collapse toggle only on notes that actually overflow the clamp,
+    // so short notes that already fit get no arrow.
+    function markClamped() {
+      els.results.querySelectorAll(".notes").forEach((n) => {
+        if (n.classList.contains("expanded")) return;
+        const toggle = n.nextElementSibling;
+        const overflowing = n.scrollHeight > n.clientHeight + 1;
+        if (toggle && toggle.classList.contains("notes-toggle")) {
+          toggle.hidden = !overflowing;
+          toggle.textContent = "Show more ▾";
+        }
+      });
+    }
+    window.addEventListener("resize", markClamped);
 
     function esc(s) {
       return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -139,6 +168,17 @@
       els.q.addEventListener(ev, render);
       els.distributor.addEventListener(ev, render);
       els.runtime.addEventListener(ev, render);
+    });
+
+    // Expand or collapse a note only when its Show more/less toggle is clicked.
+    els.results.addEventListener("click", (e) => {
+      const toggle = e.target.closest(".notes-toggle");
+      if (!toggle) return;
+      const note = toggle.previousElementSibling;
+      if (note && note.classList.contains("notes")) {
+        const expanded = note.classList.toggle("expanded");
+        toggle.textContent = expanded ? "Show less ▴" : "Show more ▾";
+      }
     });
 
     // A cross-origin link ignores the `download` attribute, and raw files are served

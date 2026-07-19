@@ -11,6 +11,11 @@ import re
 MANDATORY_FIELDS = ["game", "title", "version"]
 OPTIONAL_FIELDS = ["distributor", "runtime", "binary_sha256", "author"]
 
+# notes is the only multi-line field and is handled separately from the flat fields above.
+# Being the one free-form multi-line input, it is bounded by these sanity limits.
+MAX_NOTES_LENGTH = 1000
+MAX_NOTES_LINES = 20
+
 # The metadata block in a PR body is a flat ```yaml fence of `key: value` lines.
 _YAML_FENCE = re.compile(r"```ya?ml\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
 
@@ -18,8 +23,10 @@ _YAML_FENCE = re.compile(r"```ya?ml\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
 def parse_metadata_block(pr_body: str) -> dict[str, str]:
     """Extract the first ```yaml fenced block from a PR body into a flat dict.
 
-    Comments (`# ...`) and blank values are dropped, so unfilled optional fields
-    simply don't appear in the result.
+    Every field is single-line except `notes`, which is the only multi-line field: it must
+    be the last key in the block, and everything after `notes:` up to the end of the fence
+    is captured verbatim. For the single-line fields, inline comments (`# ...`) and blank
+    values are dropped, so unfilled optional fields simply don't appear in the result.
 
     Args:
         pr_body: The full pull request description.
@@ -33,13 +40,24 @@ def parse_metadata_block(pr_body: str) -> dict[str, str]:
     if not match:
         return {}
     meta: dict[str, str] = {}
-    for line in match.group(1).splitlines():
-        line = line.split("#", 1)[0].strip()  # strip inline comments
+    lines = match.group(1).splitlines()
+    for i, raw in enumerate(lines):
+        line = raw.split("#", 1)[0].strip()  # strip inline comments
         if not line or ":" not in line:
             continue
         key, value = line.split(":", 1)
-        key, value = key.strip(), value.strip()
-        if key and value:
+        key = key.strip()
+        if key == "notes":
+            # notes is the only multi-line field. Capture the rest of the block verbatim so
+            # it can span lines, then stop. It must be the last key, which the template
+            # layout enforces. Every other field stays strictly single-line.
+            note_lines = ([value] if value.strip() else []) + lines[i + 1 :]
+            notes = "\n".join(note_lines).strip()
+            if notes:
+                meta["notes"] = notes
+            break
+        value = value.strip()
+        if value:
             meta[key] = value
     return meta
 
@@ -56,6 +74,17 @@ def validate_metadata(meta: dict[str, str]) -> list[str]:
     sha = meta.get("binary_sha256", "")
     if sha and not re.fullmatch(r"[0-9a-fA-F]{64}", sha):
         errors.append("`binary_sha256` must be a 64-character hex sha256 if provided")
+    notes = meta.get("notes", "")
+    if notes:
+        # notes is the only free-form multi-line input, so bound its size and reject control
+        # characters. Newlines are escaped by json on write, so notes cannot break out of the
+        # generated JSON or the code fence in the PR comment.
+        if len(notes) > MAX_NOTES_LENGTH:
+            errors.append(f"`notes` is too long ({len(notes)} characters, max {MAX_NOTES_LENGTH}). Please shorten it.")
+        if notes.count("\n") + 1 > MAX_NOTES_LINES:
+            errors.append(f"`notes` has too many lines (max {MAX_NOTES_LINES})")
+        if any((ord(c) < 32 or ord(c) == 127) and c not in "\n\t" for c in notes):
+            errors.append("`notes` contains control characters, please use plain text")
     return errors
 
 
@@ -97,5 +126,7 @@ def sidecar_from_metadata(meta: dict[str, str], pct_version: int) -> dict:
     for field in MANDATORY_FIELDS + OPTIONAL_FIELDS:
         if meta.get(field):
             sidecar[field] = meta[field]
+    if meta.get("notes"):
+        sidecar["notes"] = meta["notes"]
     sidecar["pct_version"] = pct_version
     return sidecar
