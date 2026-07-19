@@ -116,7 +116,7 @@
 
       els.results.innerHTML = Object.keys(byGame).sort().map((game) => {
         const cards = byGame[game].map((t) => {
-          const chips = [t.distributor, t.version && "v" + t.version, t.runtime]
+          const chips = [t.distributor, t.version, t.runtime]
             .filter(Boolean).map((c) => `<span class="chip">${esc(c)}</span>`).join("");
           const author = t.author ? `<div class="meta-author">by ${esc(t.author)}</div>` : "";
           const href = RAW_BASE + t.pct_path.split("/").map(encodeURIComponent).join("/");
