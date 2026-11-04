@@ -1,7 +1,7 @@
 name: Validate submission
 
 # pull_request_target runs in the BASE repo context so it can comment on PRs from
-# forks (which is how the browser "upload → auto-fork" flow submits). The submitted
+# forks (which is how the browser "fork → upload" flow submits). The submitted
 # .pct is treated strictly as data (parsed, never executed) and the fork's code is
 # never checked out or run. Only the trusted scripts below run.
 on:
